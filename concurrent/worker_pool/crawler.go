@@ -1,45 +1,43 @@
-package main
+package worker_pool
 
 import (
 	"fmt"
-	"math/rand"
 	"sync/atomic"
 	"time"
+
+	"github.com/zaphod72/web_crawler/concurrent/lib"
 )
 
-const nPages = 100
-const maxParsers = 20
-
-type pageLinks struct {
-	Page  int
-	Links []*pageLinks
-	Seen  bool
-}
+type pageLinks *lib.PageLinks
 
 type pageParser struct {
-	pages    chan *pageLinks
+	pages    chan pageLinks
 	count    atomic.Int32
 	queueLen atomic.Int32
 	done     chan bool
 }
 
+type Crawler struct {
+	lib.PageCrawler
+}
+
 func makeParser() *pageParser {
 	parser := new(pageParser)
-	parser.pages = make(chan *pageLinks)
+	parser.pages = make(chan pageLinks)
 	parser.done = make(chan bool)
 	return parser
 }
 
-func crawl(rootPage *pageLinks) {
+func (c Crawler) Crawl() {
 	parser := makeParser()
-	parser.sendPage(rootPage)
+	parser.sendPage(c.PageCrawler.RootPage)
 	parser.startParser()
 	<-parser.done
 	close(parser.done)
 	close(parser.pages)
 }
 
-func (p *pageParser) sendPage(toParse *pageLinks) bool {
+func (p *pageParser) sendPage(toParse pageLinks) bool {
 	if !toParse.Seen {
 		p.queueLen.Add(1)
 		// Send on a separate goroutine so we don't block
@@ -52,7 +50,7 @@ func (p *pageParser) sendPage(toParse *pageLinks) bool {
 }
 
 func (p *pageParser) startParser() {
-	if p.count.Load() < maxParsers {
+	if p.count.Load() < lib.MaxParsers {
 		// Don't know when the goroutine will start so increment parser count now
 		count := p.count.Add(1)
 		fmt.Printf("Started parser %v\n", count)
@@ -85,43 +83,5 @@ func (p *pageParser) parse() {
 
 	if p.count.Add(-1) == 0 {
 		p.done <- true
-	}
-}
-
-func main() {
-	pages := make([]pageLinks, nPages)
-
-	for i := 0; i < nPages; i++ {
-		nLinks := rand.Intn(3) + 1
-		pages[i].Page = i
-		pages[i].Links = make([]*pageLinks, nLinks)
-
-		for n := 0; n < nLinks; n++ {
-			pages[i].Links[n] = &pages[rand.Intn(nPages)]
-		}
-	}
-
-	crawl(&pages[0])
-
-	verify(pages)
-}
-
-func verify(pages []pageLinks) {
-	crawled := make([]bool, nPages)
-	listCrawled(&pages[0], crawled)
-	for i := 0; i < nPages; i++ {
-		if crawled[i] != pages[i].Seen {
-			fmt.Printf("Page %v, expected %v, actual %v\n", i, crawled[i], pages[i].Seen)
-		}
-	}
-}
-
-func listCrawled(page *pageLinks, crawled []bool) {
-	crawled[page.Page] = true
-
-	for _, p := range page.Links {
-		if !crawled[p.Page] {
-			listCrawled(p, crawled)
-		}
 	}
 }

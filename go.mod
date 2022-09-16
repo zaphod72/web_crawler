@@ -1,3 +1,3 @@
-module github.com/zaphod72/learn_concurrency
+module github.com/zaphod72/web_crawler
 
 go 1.19
