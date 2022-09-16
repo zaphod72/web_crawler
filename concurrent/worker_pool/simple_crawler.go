@@ -81,9 +81,7 @@ func (p *twoChannelParser) parse() {
 				if link.Seen {
 					p.queueLen.Add(-1)
 				} else {
-					go func() {
-						p.toLoad <- link
-					}()
+					p.toLoad <- link
 				}
 			}()
 		}
