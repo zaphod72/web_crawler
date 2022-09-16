@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	"github.com/zaphod72/web_crawler/concurrent/fanout"
 	"github.com/zaphod72/web_crawler/concurrent/lib"
 	"github.com/zaphod72/web_crawler/concurrent/waitgroup"
 	"github.com/zaphod72/web_crawler/concurrent/worker_pool"
@@ -24,10 +25,23 @@ func main() {
 		}
 	}
 
-	pageCrawler := lib.PageCrawler{&pages[0]}
-	workerPoolCrawler := worker_pool.Crawler{pageCrawler}
-	waitgroupCrawler := waitgroup.Crawler{pageCrawler}
-	workerPoolCrawler.Crawl()
+	pageCrawler := lib.PageCrawler{RootPage: &pages[0]}
+
+	crawler := 1
+	switch crawler {
+	case 0:
+		singleChannelCrawler := worker_pool.SingleChannelCrawler{PageCrawler: pageCrawler}
+		singleChannelCrawler.Crawl()
+	case 1:
+		twoChannelCrawler := worker_pool.TwoChannelCrawler{PageCrawler: pageCrawler}
+		twoChannelCrawler.Crawl()
+	case 2:
+		waitgroupCrawler := waitgroup.Crawler{PageCrawler: pageCrawler}
+		waitgroupCrawler.Crawl()
+	case 3:
+		fanoutCrawler := fanout.Crawler{PageCrawler: pageCrawler}
+		fanoutCrawler.Crawl()
+	}
 
 	verify(pages)
 }

@@ -28,9 +28,9 @@ func makeParser() *pageParser {
 	return parser
 }
 
-func crawl(rootPage pageLinks) {
+func (c Crawler) Crawl() {
 	parser := makeParser()
-	parser.sendPage(rootPage)
+	parser.sendPage(c.RootPage)
 	for i := 0; i < lib.MaxParsers; i++ {
 		parser.wg.Add(1)
 		go parser.parse()
