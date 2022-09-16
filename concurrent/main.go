@@ -27,7 +27,7 @@ func main() {
 
 	pageCrawler := lib.PageCrawler{RootPage: &pages[0]}
 
-	crawler := 1
+	crawler := 0
 	switch crawler {
 	case 0:
 		singleChannelCrawler := worker_pool.SingleChannelCrawler{PageCrawler: pageCrawler}
@@ -44,6 +44,7 @@ func main() {
 	}
 
 	verify(pages)
+	fmt.Println("Verified")
 }
 
 func verify(pages []lib.PageLinks) {

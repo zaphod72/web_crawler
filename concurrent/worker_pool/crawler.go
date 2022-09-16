@@ -78,10 +78,17 @@ func (p *singleChannelParser) parse() {
 			}
 			p.queueLen.Add(-1)
 		default:
+			// Now we're a busy wait :(
+
+			// When all the work is done this goroutine will be waiting on <-p.pages which will never happen
+			// or it will go to the default case.
+			// Without default this gorouting would be deadlocked waiting on <-p.pages.
+			// Using a done channel is cleaner and idiomatic. (See the other examples.)
 		}
 	}
 
-	if p.count.Add(-1) == 0 {
+	// Make sure we only send done once
+	if p.count.Add(-1) == -1 {
 		p.done <- true
 	}
 }

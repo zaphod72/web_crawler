@@ -30,22 +30,25 @@ func NewTwoChannelParser() *twoChannelParser {
 
 func (c TwoChannelCrawler) Crawl() {
 	parser := NewTwoChannelParser()
-	for i := 0; i < 1; i++ {
-		go parser.load()
+	for i := 0; i < lib.MaxParsers; i++ {
+		go parser.load(i)
 	}
 	parser.toLoad <- c.RootPage
 	parser.queueLen.Add(1)
 	// parse() returns when there is no work left
 	parser.parse()
-	/*
-		for i := 0; i < lib.MaxParsers; i++ {
-			parser.done <- struct{}{}
-		}
+	/* This achieves the same as closing the channel, but just closing the channel works very well.
+
+	The <-p.done channel read in all goroutines will receive nil
+
+	for i := 0; i < lib.MaxParsers; i++ {
+		parser.done <- struct{}{}
+	}
 	*/
 	close(parser.done)
 }
 
-func (p *twoChannelParser) load() {
+func (p *twoChannelParser) load(parserId int) {
 	for {
 		select {
 		case page := <-p.toLoad:
@@ -78,7 +81,9 @@ func (p *twoChannelParser) parse() {
 				if link.Seen {
 					p.queueLen.Add(-1)
 				} else {
-					p.toLoad <- link
+					go func() {
+						p.toLoad <- link
+					}()
 				}
 			}()
 		}
