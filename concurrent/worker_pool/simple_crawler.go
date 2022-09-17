@@ -37,13 +37,13 @@ func (c TwoChannelCrawler) Crawl() {
 	parser.queueLen.Add(1)
 	// parse() returns when there is no work left
 	parser.parse()
-	/* This achieves the same as closing the channel, but just closing the channel works very well.
+	/*
+		   This achieves the same as closing the channel, but just closing the channel works very well.
+		   The <-p.done channel read in all goroutines will receive nil on the closed channel.
 
-	The <-p.done channel read in all goroutines will receive nil
-
-	for i := 0; i < lib.MaxParsers; i++ {
-		parser.done <- struct{}{}
-	}
+		for i := 0; i < lib.MaxParsers; i++ {
+			parser.done <- struct{}{}
+		}
 	*/
 	close(parser.done)
 }
@@ -78,11 +78,7 @@ func (p *twoChannelParser) parse() {
 			p.queueLen.Add(1)
 			link := link
 			go func() {
-				if link.Seen {
-					p.queueLen.Add(-1)
-				} else {
-					p.toLoad <- link
-				}
+				p.toLoad <- link
 			}()
 		}
 		p.queueLen.Add(-1)

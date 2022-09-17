@@ -11,80 +11,73 @@ import (
 
 type pageLinks *lib.PageLinks
 
-type pageParser struct {
-	toLoad   chan pageLinks
-	toParse  chan pageLinks
-	done     chan struct{}
-	wg       sync.WaitGroup
-	queueLen atomic.Int32
-}
-
 type Crawler struct {
 	lib.PageCrawler
 }
 
-func NewParser() *pageParser {
-	return &pageParser{
-		toLoad:  make(chan pageLinks),
-		toParse: make(chan pageLinks),
-		wg:      sync.WaitGroup{},
-	}
-}
-
 func (c Crawler) Crawl() {
-	parser := NewParser()
+	wg := sync.WaitGroup{}
+	pages := make(chan pageLinks)
+	workCounter := make(chan int)
+	done := make(chan struct{})
+
 	for i := 0; i < lib.MaxParsers; i++ {
-		parser.wg.Add(1)
-		go parser.load()
+		wg.Add(1)
+		go parse(&wg, pages, workCounter, done)
 	}
-	parser.toLoad <- c.RootPage
-	parser.queueLen.Add(1)
-	// parse() returns when there is no work left
-	parser.parse()
-	// Closing the toLoad channel here would send nil to page := <-p.toLoad
-	// and a NPE on page.Seen
-	// Using the done channel instead avoids this.
-	parser.done <- struct{}{}
-	parser.wg.Wait()
+	pages <- c.RootPage
+	monitorWorkCounter(workCounter)
+	close(done)
+	wg.Wait()
 }
 
-func (p *pageParser) load() {
-	defer p.wg.Done()
+func monitorWorkCounter(workCounter <-chan int) {
+	workCount := atomic.Int32{}
 	for {
 		select {
-		case page := <-p.toLoad:
-			if page.Seen {
-				p.queueLen.Add(-1)
-				continue
+		case queueChange := <-workCounter:
+			if workCount.Add(int32(queueChange)) == 0 {
+				return
 			}
-			// Fetching page
-			fmt.Printf("Loading %v\n", page.Page)
-			time.Sleep(time.Millisecond * 250)
-			page.Seen = true
-			p.toParse <- page
-		case <-p.done:
 		}
 	}
 }
 
-func (p *pageParser) parse() {
-	for p.queueLen.Load() > 0 {
-		page := <-p.toParse
-		fmt.Printf("Parsing %v\n", page.Page)
-		for _, link := range page.Links {
-			if link.Seen {
-				continue
-			}
-			p.queueLen.Add(1)
-			link := link
-			go func() {
-				if link.Seen {
-					p.queueLen.Add(-1)
-				} else {
-					p.toLoad <- link
-				}
-			}()
+func parse(wg *sync.WaitGroup, pages chan pageLinks, workCounter chan<- int, done <-chan struct{}) {
+	defer wg.Done()
+	for {
+		select {
+		case page := <-pages:
+			workCounter <- parsePage(page, pages)
+		case <-done:
+			return
 		}
-		p.queueLen.Add(-1)
 	}
+}
+
+// parsePage will queue all not seen links found in the page
+// as long as page is not seen
+// Returns the change in the queue size, i.e. -1 for this page parsed +1 for each not seen link
+func parsePage(page pageLinks, pages chan<- pageLinks) int {
+	queueLenChange := -1
+	if page.Seen {
+		return queueLenChange
+	}
+	// Fetching page
+	fmt.Printf("Loading %v\n", page.Page)
+	time.Sleep(time.Millisecond * 250)
+	page.Seen = true
+
+	// Queue links
+	for _, link := range page.Links {
+		if link.Seen {
+			continue
+		}
+		link := link
+		go func() {
+			pages <- link
+		}()
+		queueLenChange++
+	}
+	return queueLenChange
 }
