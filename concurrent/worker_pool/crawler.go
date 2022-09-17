@@ -59,36 +59,38 @@ func (p *singleChannelParser) startParser() {
 }
 
 func (p *singleChannelParser) parse() {
-	for p.queueLen.Load() > 0 {
+	queueLen := p.queueLen.Load()
+	for queueLen > 0 {
 		select {
 		case page := <-p.pages:
 			if page.Seen {
 				p.queueLen.Add(-1)
-				break
+				continue
 			}
 			page.Seen = true
 
 			fmt.Printf("Parsing %v\n", page.Page)
 			time.Sleep(time.Millisecond * 250)
-			for i, page := range page.Links {
+			for i, link := range page.Links {
+				if link.Seen {
+					continue
+				}
+				p.queueLen.Add(1)
 				// Not starting another parse goroutine for the first link as this goroutine can parse it
-				if p.sendPage(page) && i > 0 {
+				if i > 0 {
 					p.startParser()
 				}
+				// Send on a separate goroutine so we don't block
+				link := link
+				go func() {
+					p.pages <- link
+				}()
 			}
-			p.queueLen.Add(-1)
-		default:
-			// Now we're a busy wait :(
-
-			// When all the work is done this goroutine will be waiting on <-p.pages which will never happen
-			// or it will go to the default case.
-			// Without default this gorouting would be deadlocked waiting on <-p.pages.
-			// Using a done channel is cleaner and idiomatic. (See the other examples.)
+			queueLen = p.queueLen.Add(-1)
 		}
 	}
 
-	// Make sure we only send done once
-	if p.count.Add(-1) == -1 {
+	if queueLen == 0 {
 		p.done <- true
 	}
 }
