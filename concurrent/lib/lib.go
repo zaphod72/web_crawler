@@ -1,5 +1,7 @@
 package lib
 
+import "sync/atomic"
+
 const MaxParsers = 20
 
 type Crawler interface {
@@ -11,7 +13,8 @@ type PageCrawler struct {
 }
 
 type PageLinks struct {
-	Page  int
-	Links []*PageLinks
-	Seen  bool
+	Page       int
+	Links      []*PageLinks
+	Seen       bool
+	AtomicSeen atomic.Bool
 }

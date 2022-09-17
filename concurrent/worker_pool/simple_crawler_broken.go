@@ -10,7 +10,7 @@ import (
 func (c TwoChannelCrawler) _Crawl() {
 	parser := NewTwoChannelParser()
 	for i := 0; i < 1; i++ {
-		go parser.load()
+		go parser._load()
 	}
 	parser.toLoad <- c.RootPage
 	parser.queueLen.Add(1)

@@ -27,7 +27,7 @@ func main() {
 
 	pageCrawler := lib.PageCrawler{RootPage: &pages[0]}
 
-	crawler := 0
+	crawler := 2
 	switch crawler {
 	case 0:
 		singleChannelCrawler := worker_pool.SingleChannelCrawler{PageCrawler: pageCrawler}

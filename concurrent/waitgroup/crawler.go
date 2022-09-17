@@ -26,13 +26,14 @@ func (c Crawler) Crawl() {
 		go parse(&wg, pages, workCounter, done)
 	}
 	pages <- c.RootPage
-	monitorWorkCounter(workCounter)
+	monitorWorkCounter(workCounter, 1)
 	close(done)
 	wg.Wait()
 }
 
-func monitorWorkCounter(workCounter <-chan int) {
+func monitorWorkCounter(workCounter <-chan int, initialValue int32) {
 	workCount := atomic.Int32{}
+	workCount.Store(initialValue)
 	for {
 		select {
 		case queueChange := <-workCounter:
@@ -43,7 +44,12 @@ func monitorWorkCounter(workCounter <-chan int) {
 	}
 }
 
-func parse(wg *sync.WaitGroup, pages chan pageLinks, workCounter chan<- int, done <-chan struct{}) {
+func parse(
+	wg *sync.WaitGroup,
+	pages chan pageLinks,
+	workCounter chan<- int,
+	done <-chan struct{}) {
+
 	defer wg.Done()
 	for {
 		select {
@@ -60,13 +66,18 @@ func parse(wg *sync.WaitGroup, pages chan pageLinks, workCounter chan<- int, don
 // Returns the change in the queue size, i.e. -1 for this page parsed +1 for each not seen link
 func parsePage(page pageLinks, pages chan<- pageLinks) int {
 	queueLenChange := -1
-	if page.Seen {
+
+	// Read and write of page seen - make it atomic
+	seen := page.AtomicSeen.Swap(true)
+	if seen {
 		return queueLenChange
 	}
+
+	page.Seen = true // Just so the verify function works
+
 	// Fetching page
 	fmt.Printf("Loading %v\n", page.Page)
 	time.Sleep(time.Millisecond * 250)
-	page.Seen = true
 
 	// Queue links
 	for _, link := range page.Links {
