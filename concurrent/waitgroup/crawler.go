@@ -33,9 +33,12 @@ func parse(
 	pages chan pageLinks,
 	done <-chan struct{}) {
 
+	// Do not call wg.Done()
+
 	for {
 		select {
 		case page := <-pages:
+			// Once the wg counter reaches zero wg.Wait() will return
 			wg.Add(parsePage(page, pages))
 		case <-done:
 			return
