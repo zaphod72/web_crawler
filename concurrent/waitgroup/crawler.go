@@ -38,8 +38,11 @@ func parse(
 	for {
 		select {
 		case page := <-pages:
+			queueSizeDelta := parsePage(page, pages)
+			// -1 for this parser completing its work
+			queueSizeDelta--
 			// Once the wg counter reaches zero wg.Wait() will return
-			wg.Add(parsePage(page, pages))
+			wg.Add(queueSizeDelta)
 		case <-done:
 			return
 		}
@@ -48,14 +51,12 @@ func parse(
 
 // parsePage will queue all not seen links found in the page
 // as long as page is not seen
-// Returns the change in the queue size, i.e. -1 for this page parsed +1 for each not seen link
+// Returns the number of unseen links
 func parsePage(page pageLinks, pages chan<- pageLinks) int {
-	queueLenChange := -1
-
 	// Read and write of page seen - make it atomic
 	seen := page.AtomicSeen.Swap(true)
 	if seen {
-		return queueLenChange
+		return 0
 	}
 
 	page.Seen = true // Just so the verify function works
@@ -65,6 +66,7 @@ func parsePage(page pageLinks, pages chan<- pageLinks) int {
 	time.Sleep(time.Millisecond * 250)
 
 	// Queue links
+	queueLenChange := 0
 	for _, link := range page.Links {
 		if link.Seen {
 			continue
